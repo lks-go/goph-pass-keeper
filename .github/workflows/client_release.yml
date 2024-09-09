@@ -1,0 +1,58 @@
+name: Build & Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        arch: [amd64]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.22.2'
+      - name: Get dependencies
+        run: |
+          go get -v -t -d ./...
+      - name: Build
+        env:
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          go build -o bin/app ./cmd/client
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-${{ runner.os }}-${{ matrix.arch }}
+          path: bin/app
+  release:
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        arch: [amd64]
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: app-${{ runner.os }}-${{ matrix.arch }}
+          path: ./
+      - name: Get Release
+        id: get_release
+        uses: bruceadams/get-release@v1.3.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./app
+          asset_name: app-${{ runner.os }}-${{ matrix.arch }}
+          asset_content_type: application/octet-stream
